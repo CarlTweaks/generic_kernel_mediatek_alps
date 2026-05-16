@@ -1,0 +1,38 @@
+name: Build Infinix Pentest Kernel
+
+on:
+  workflow_dispatch: # Pindutan para sa manual Run Workflow sa GitHub browser
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v4
+
+    - name: Install Compilers and Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex kmod gcc-aarch64-linux-gnu clang lld
+
+    - name: Compile Kernel and Modules
+      run: |
+        # I-setup ang Clang bilang pangunahing compiler gaya ng nakasaad sa stock config mo
+        export MAKE_FLAGS="ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang LD=ld.lld"
+        
+        # 1. I-load ang Infinix Hot 11 Play recipe na may Pentest, OTG, at KernelSU vitamins
+        make O=out $MAKE_FLAGS tran_x688b_defconfig
+        
+        # 2. Awtomatikong i-sync at i-upgrade ang config patungong 4.19.191 nang walang prompts
+        make O=out $MAKE_FLAGS olddefconfig
+        
+        # 3. Simulan ang aktwal na pagbi-bake gamit ang lakas ng mga server ng GitHub
+        make O=out $MAKE_FLAGS -j$(nproc)
+
+    - name: Upload Finished Kernel and Modules
+      uses: actions/upload-artifact@v4
+      with:
+        name: Finished-Infinix-Kernel
+        path: |
+          out/arch/arm64/boot/Image.gz-dtb
+          out/drivers/bluetooth/hci_vhci.ko
