@@ -1,0 +1,42 @@
+name: Build Infinix Pentest Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04 # Balik sa mabilis na server para walang pila!
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v4
+
+    - name: Install Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex kmod
+
+    - name: Download Official Android GCC 4.9 (The Perfect Match)
+      run: |
+        cd $GITHUB_WORKSPACE
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain-64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 toolchain-32
+
+    - name: Compile Kernel
+      run: |
+        # Ituturo natin sa downloaded Google compilers para walang error sa 4.19 kernel
+        export MAKE_FLAGS="ARCH=arm64 \
+                           CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain-64/bin/aarch64-linux-android- \
+                           CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain-32/bin/arm-linux-androideabi- \
+                           KCFLAGS=-w"
+        
+        make O=out $MAKE_FLAGS defconfig
+        make O=out $MAKE_FLAGS olddefconfig
+        make O=out $MAKE_FLAGS Image.gz modules -j$(nproc)
+
+    - name: Upload Finished Kernel and Modules
+      uses: actions/upload-artifact@v4
+      with:
+        name: Finished-Infinix-Kernel
+        path: |
+          out/arch/arm64/boot/Image.gz
+          out/drivers/bluetooth/hci_vhci.ko
