@@ -1,0 +1,47 @@
+name: Build Infinix Pentest Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v4
+
+    - name: Install Tools and Multiarch Libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev bison flex kmod lib32z1
+
+    - name: Download Official AOSP 64-bit GCC Toolchains
+      run: |
+        cd $GITHUB_WORKSPACE
+        # Magkuha ng selyadong 64-bit host binariaes mula sa Android prebuilts ng Google
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain-64
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 toolchain-32
+
+    - name: Compile Kernel
+      run: |
+        export MAKE_FLAGS="ARCH=arm64 \
+                           CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain-64/bin/aarch64-linux-android- \
+                           CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain-32/bin/arm-linux-androideabi- \
+                           KCFLAGS=-w"
+        
+        # 1. Load ng defconfig mo
+        make O=out $MAKE_FLAGS defconfig
+        
+        # 2. Sync ng configs para walang prompt
+        make O=out $MAKE_FLAGS olddefconfig
+        
+        # 3. Simulan ang compile ng core kernel at modules
+        make O=out $MAKE_FLAGS Image.gz modules -j$(nproc)
+
+    - name: Upload Finished Kernel and Modules
+      uses: actions/upload-artifact@v4
+      with:
+        name: Finished-Infinix-Kernel
+        path: |
+          out/arch/arm64/boot/Image.gz
+          out/drivers/bluetooth/hci_vhci.ko
